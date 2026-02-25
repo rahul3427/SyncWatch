@@ -1,6 +1,4 @@
-// ─── SyncWatch Room — Core Logic ────────────────────────────
-// Handles: Socket.IO, YouTube IFrame API, search sync, browse sync, chat
-
+// ─── SyncWatch Room — YouTube + Chat ────────────────────────
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 
@@ -26,7 +24,6 @@ let ytPlayer = null;
 let ytReady = false;
 let ignoreStateChange = false;
 let currentVideoId = null;
-let browseHistory = [];
 
 // ═══════════════════════════════════════════════════════════
 //  TOAST NOTIFICATIONS
@@ -51,103 +48,23 @@ $('#btn-copy-code').addEventListener('click', () => {
 });
 
 // ═══════════════════════════════════════════════════════════
-//  MAIN TABS (unified: YouTube / Search / Browse)
+//  MOBILE CHAT TOGGLE
 // ═══════════════════════════════════════════════════════════
-function switchView(viewName) {
-  // Update desktop tabs
-  $$('.main-tab').forEach(t => t.classList.remove('active'));
-  $$('.main-view').forEach(v => v.classList.remove('active'));
-  const desktopTab = $(`.main-tab[data-view="${viewName}"]`);
-  if (desktopTab) desktopTab.classList.add('active');
-  $(`#view-${viewName}`).classList.add('active');
-
-  // Update mobile nav
-  $$('.mobile-nav-btn').forEach(b => b.classList.remove('active'));
-  const mobileBtn = $(`.mobile-nav-btn[data-view="${viewName}"]`);
-  if (mobileBtn) mobileBtn.classList.add('active');
-
-  // Close chat panel on mobile if switching to content views
-  if (viewName !== 'chat') {
-    const chatPanel = $('#panel-chat');
-    if (chatPanel) chatPanel.classList.remove('open');
-  }
-}
-
-// Desktop tabs
-$$('.main-tab').forEach(tab => {
-  tab.addEventListener('click', () => switchView(tab.dataset.view));
+$('#btn-chat-toggle').addEventListener('click', () => {
+  const chatPanel = $('#panel-chat');
+  chatPanel.classList.toggle('open');
+  // Clear badge
+  $('#chat-badge').style.display = 'none';
 });
 
-// Mobile bottom nav
-$$('.mobile-nav-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    if (btn.dataset.view === 'chat') {
-      // Toggle chat panel
-      const chatPanel = $('#panel-chat');
-      chatPanel.classList.toggle('open');
-      btn.classList.toggle('active');
-      // Clear chat badge
-      const badge = btn.querySelector('.chat-badge');
-      if (badge) badge.style.display = 'none';
-    } else {
-      switchView(btn.dataset.view);
-    }
-  });
-});
-
-// ═══════════════════════════════════════════════════════════
-//  BROWSE FUNCTIONALITY
-// ═══════════════════════════════════════════════════════════
-$('#btn-browse').addEventListener('click', doBrowse);
-$('#browse-url-input').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') doBrowse();
-});
-
-// Back button
-$('#btn-browse-back').addEventListener('click', () => {
-  if (browseHistory.length > 1) {
-    browseHistory.pop(); // Remove current
-    const prevUrl = browseHistory[browseHistory.length - 1];
-    loadInBrowser(prevUrl, false); // Don't add to history
-  }
-});
-
-function doBrowse() {
-  let url = $('#browse-url-input').value.trim();
-  if (!url) return;
-  if (!/^https?:\/\//i.test(url)) {
-    url = 'https://' + url;
-    $('#browse-url-input').value = url;
-  }
-  loadInBrowser(url);
-  socket.emit('browse-url', { url });
-}
-
-function loadInBrowser(url, addToHistory = true) {
-  if (!/^https?:\/\//i.test(url)) {
-    url = 'https://' + url;
-  }
-  // Switch to browse view
-  switchView('browse');
-  // Load via proxy
-  const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
-  $('#browse-frame').src = proxyUrl;
-  $('#browser-placeholder').style.display = 'none';
-  $('#browse-url-input').value = url;
-  if (addToHistory) {
-    browseHistory.push(url);
-  }
-}
-
-// Listen for proxy navigation messages from iframe
-window.addEventListener('message', (e) => {
-  if (e.data && e.data.type === 'proxy-navigate') {
-    const url = e.data.url;
-    $('#browse-url-input').value = url;
-    // Add to history if different from current
-    if (browseHistory.length === 0 || browseHistory[browseHistory.length - 1] !== url) {
-      browseHistory.push(url);
-    }
+// Close chat when clicking outside on mobile
+document.addEventListener('click', (e) => {
+  const chatPanel = $('#panel-chat');
+  const toggleBtn = $('#btn-chat-toggle');
+  if (chatPanel.classList.contains('open') &&
+      !chatPanel.contains(e.target) &&
+      !toggleBtn.contains(e.target)) {
+    chatPanel.classList.remove('open');
   }
 });
 
@@ -190,7 +107,6 @@ function onPlayerStateChange(event) {
 function loadVideo(videoId, title) {
   if (!ytReady) return;
   currentVideoId = videoId;
-  switchView('youtube');
   $('#player-placeholder').style.display = 'none';
   $('#now-playing').style.display = 'flex';
   $('#now-playing-title').textContent = title || videoId;
@@ -206,6 +122,47 @@ function loadVideo(videoId, title) {
 }
 
 // ═══════════════════════════════════════════════════════════
+//  PICTURE-IN-PICTURE (Background Play)
+// ═══════════════════════════════════════════════════════════
+$('#btn-pip').addEventListener('click', async () => {
+  try {
+    // Get the video element inside the YouTube iframe
+    const iframe = document.querySelector('#yt-player iframe');
+    if (!iframe) {
+      showToast('Start playing a video first');
+      return;
+    }
+
+    // Try to use the iframe's video element for PiP
+    // Since we can't access cross-origin iframe content,
+    // we create a canvas-based PiP workaround
+    if (document.pictureInPictureElement) {
+      await document.exitPictureInPicture();
+      showToast('Exited Picture-in-Picture');
+    } else {
+      // Try native PiP on the iframe (works in some browsers)
+      if (iframe.requestPictureInPicture) {
+        await iframe.requestPictureInPicture();
+        showToast('🖼️ Picture-in-Picture enabled! You can minimize the browser.');
+      } else {
+        // Fallback: open video in a mini popup window
+        if (currentVideoId) {
+          const pipUrl = `https://www.youtube.com/embed/${currentVideoId}?autoplay=1&playsinline=1`;
+          const pipWin = window.open(pipUrl, 'pip', 'width=400,height=250,top=50,right=50');
+          if (pipWin) {
+            showToast('🖼️ Opened mini player window! Keep it open for background audio.');
+          } else {
+            showToast('⚠️ Please allow popups for background play.');
+          }
+        }
+      }
+    }
+  } catch (err) {
+    showToast('⚠️ PiP not supported. Try the mini player on YouTube controls.');
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
 //  YOUTUBE SEARCH
 // ═══════════════════════════════════════════════════════════
 $('#btn-yt-search').addEventListener('click', doYTSearch);
@@ -216,6 +173,11 @@ $('#yt-search-input').addEventListener('keydown', (e) => {
 async function doYTSearch() {
   const query = $('#yt-search-input').value.trim();
   if (!query) return;
+
+  // Blur input on mobile to close keyboard
+  if (window.innerWidth <= 768) {
+    $('#yt-search-input').blur();
+  }
 
   $('#yt-search-info').textContent = 'Searching...';
   $('#yt-results').innerHTML = '';
@@ -263,77 +225,6 @@ function renderYTResults(results) {
 }
 
 // ═══════════════════════════════════════════════════════════
-//  WEB SEARCH
-// ═══════════════════════════════════════════════════════════
-$('#btn-web-search').addEventListener('click', doWebSearch);
-$('#web-search-input').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') doWebSearch();
-});
-
-function doWebSearch() {
-  const query = $('#web-search-input').value.trim();
-  if (!query) return;
-
-  $('#web-search-info').textContent = 'Searching...';
-  $('#web-results').innerHTML = '';
-
-  fetch(`/api/web-search?q=${encodeURIComponent(query)}`)
-    .then(res => res.json())
-    .then(data => {
-      if (data.results.length === 0) {
-        $('#web-search-info').textContent = 'No results found. Try a different search.';
-        return;
-      }
-      $('#web-search-info').textContent = `${data.results.length} results for "${query}"`;
-      renderWebResults(data.results);
-      socket.emit('web-search', { query, results: data.results });
-    })
-    .catch(() => {
-      $('#web-search-info').textContent = 'Search failed. Try again.';
-    });
-}
-
-function renderWebResults(results) {
-  const container = $('#web-results');
-  container.innerHTML = '';
-
-  results.forEach(item => {
-    const card = document.createElement('div');
-    card.className = 'web-result-card';
-    card.innerHTML = `
-      <div class="web-result-title">${escapeHTML(item.title)}</div>
-      <div class="web-result-url">${escapeHTML(item.displayUrl || item.url)}</div>
-      <div class="web-result-snippet">${escapeHTML(item.snippet)}</div>
-    `;
-    card.addEventListener('click', () => {
-      // Highlight selected result
-      $$('.web-result-card').forEach(c => c.classList.remove('active'));
-      card.classList.add('active');
-
-      // Load in preview panel (desktop) or switch to browse (mobile)
-      const isMobile = window.innerWidth <= 768;
-      if (isMobile) {
-        loadInBrowser(item.url);
-        socket.emit('browse-url', { url: item.url });
-      } else {
-        // Load in the inline preview
-        const proxyUrl = `/api/proxy?url=${encodeURIComponent(item.url)}`;
-        $('#search-preview-frame').src = proxyUrl;
-        $('#search-preview-placeholder').style.display = 'none';
-      }
-    });
-
-    // Double-click or long press: open in browse tab
-    card.addEventListener('dblclick', () => {
-      loadInBrowser(item.url);
-      socket.emit('browse-url', { url: item.url });
-    });
-
-    container.appendChild(card);
-  });
-}
-
-// ═══════════════════════════════════════════════════════════
 //  CHAT
 // ═══════════════════════════════════════════════════════════
 $('#btn-send-chat').addEventListener('click', sendChat);
@@ -347,6 +238,7 @@ function sendChat() {
   if (!text) return;
   socket.emit('chat-message', { text });
   input.value = '';
+  // Keep focus on input for easy multiple messages
   input.focus();
 }
 
@@ -371,9 +263,8 @@ function renderChatMessage(msg) {
 
   // Show badge on mobile if chat is closed
   const chatPanel = $('#panel-chat');
-  if (chatPanel && !chatPanel.classList.contains('open') && window.innerWidth <= 768) {
-    const badge = document.querySelector('#btn-toggle-chat .chat-badge');
-    if (badge) badge.style.display = 'block';
+  if (window.innerWidth <= 768 && !chatPanel.classList.contains('open')) {
+    $('#chat-badge').style.display = 'block';
   }
 }
 
@@ -385,9 +276,6 @@ function renderChatMessage(msg) {
 socket.on('room-state', (state) => {
   if (state.currentVideo) {
     loadVideo(state.currentVideo.videoId, state.currentVideo.title);
-  }
-  if (state.browseUrl) {
-    loadInBrowser(state.browseUrl);
   }
   if (state.chatHistory) {
     state.chatHistory.forEach(msg => renderChatMessage(msg));
@@ -437,27 +325,7 @@ socket.on('youtube-search-results', ({ query, results, searchedBy }) => {
   $('#yt-search-input').value = query;
   $('#yt-search-info').textContent = `${results.length} results for "${query}" (by ${searchedBy})`;
   renderYTResults(results);
-  switchView('youtube');
   showToast(`${searchedBy} searched: "${query}"`);
-});
-
-// ── Web Search from others ──
-socket.on('web-search', ({ query, results, searchedBy }) => {
-  $('#web-search-input').value = query;
-  if (results && results.length > 0) {
-    $('#web-search-info').textContent = `${results.length} results for "${query}" (by ${searchedBy})`;
-    renderWebResults(results);
-  } else {
-    $('#web-search-info').textContent = `"${query}" searched by ${searchedBy}`;
-  }
-  switchView('search');
-  showToast(`${searchedBy} searched the web: "${query}"`);
-});
-
-// ── Browse URL from others ──
-socket.on('browse-url', ({ url, sharedBy }) => {
-  loadInBrowser(url);
-  showToast(`${sharedBy} is browsing: ${url}`);
 });
 
 // ── Chat Message ──
