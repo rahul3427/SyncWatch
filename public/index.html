@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SyncWatch — Watch Together, Browse Together</title>
+    <meta
+      name="description"
+      content="Real-time collaborative platform to watch YouTube, search the web, and browse together with friends."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/css/style.css" />
+  </head>
+  <body>
+    <div class="bg-orbs">
+      <div class="orb orb-1"></div>
+      <div class="orb orb-2"></div>
+      <div class="orb orb-3"></div>
+    </div>
+
+    <main class="landing">
+      <div class="logo-section">
+        <div class="logo-icon">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+            <circle
+              cx="24"
+              cy="24"
+              r="22"
+              stroke="url(#grad)"
+              stroke-width="3"
+            />
+            <polygon points="20,16 34,24 20,32" fill="url(#grad)" />
+            <defs>
+              <linearGradient id="grad" x1="0" y1="0" x2="48" y2="48">
+                <stop offset="0%" stop-color="#a78bfa" />
+                <stop offset="100%" stop-color="#06b6d4" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <h1 class="logo-text">Sync<span>Watch</span></h1>
+        <p class="tagline">
+          Watch YouTube, search the web & browse together — in real time.
+        </p>
+      </div>
+
+      <div class="card glass-card">
+        <div class="input-group">
+          <label for="nickname">Your Nickname</label>
+          <input
+            type="text"
+            id="nickname"
+            placeholder="Enter your name..."
+            maxlength="20"
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="divider-label">Start Something New</div>
+
+        <button id="btn-create" class="btn btn-primary">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path
+              d="M10 4v12M4 10h12"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            />
+          </svg>
+          Create Room
+        </button>
+
+        <div class="divider">
+          <span>or join a friend</span>
+        </div>
+
+        <div class="input-group">
+          <label for="room-code">Room Code</label>
+          <input
+            type="text"
+            id="room-code"
+            placeholder="Enter room code..."
+            maxlength="8"
+            autocomplete="off"
+            style="text-transform: uppercase"
+          />
+        </div>
+
+        <button id="btn-join" class="btn btn-secondary">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path
+              d="M5 10h10M12 6l4 4-4 4"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          Join Room
+        </button>
+
+        <div id="error-msg" class="error-msg" style="display: none"></div>
+      </div>
+
+      <footer class="footer">
+        <p>Built for friends who love watching together 🍿</p>
+      </footer>
+    </main>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/app.js"></script>
+  </body>
+</html>
