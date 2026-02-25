@@ -159,7 +159,8 @@ app.get('/api/proxy', async (req, res) => {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9'
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Referer': targetUrl,
       },
       redirect: 'follow',
       agent: httpsAgent,
@@ -167,7 +168,7 @@ app.get('/api/proxy', async (req, res) => {
 
     const contentType = response.headers.get('content-type') || '';
 
-    // For non-HTML content (images, PDFs, etc.), pipe directly
+    // For non-HTML content, pipe directly
     if (!contentType.includes('text/html')) {
       res.set('Content-Type', contentType);
       const buffer = await response.buffer();
@@ -176,39 +177,63 @@ app.get('/api/proxy', async (req, res) => {
 
     let html = await response.text();
 
-    // Parse the base URL for resolving relative paths
     const parsedUrl = new URL(targetUrl);
     const baseUrl = `${parsedUrl.protocol}//${parsedUrl.host}`;
 
-    // Inject <base> tag with target="_self" so links stay in iframe
-    const baseTag = `<base href="${baseUrl}/" target="_self">`;
+    // ── STEP 1: Remove frame-busting meta tags ──
+    // Remove <meta http-equiv="X-Frame-Options" ...>
+    html = html.replace(/<meta[^>]*http-equiv\s*=\s*["']?X-Frame-Options["']?[^>]*>/gi, '');
+    // Remove <meta http-equiv="Content-Security-Policy" ...>
+    html = html.replace(/<meta[^>]*http-equiv\s*=\s*["']?Content-Security-Policy["']?[^>]*>/gi, '');
 
-    // Script to intercept all clicks and route them through the proxy
-    const interceptScript = `
+    // ── STEP 2: Inject anti-frame-busting + link interceptor as FIRST script ──
+    const baseTag = `<base href="${baseUrl}/" target="_self">`;
+    const sandboxScript = `
     <script>
+    // === ANTI FRAME-BUSTING: Must run BEFORE any other scripts ===
     (function() {
-      function proxyUrl(url) {
-        if (!url || url.startsWith('javascript:') || url.startsWith('#') || url.startsWith('data:')) return url;
-        try {
-          var absolute = new URL(url, document.baseURI).href;
-          if (absolute.startsWith('http')) {
-            return '/api/proxy?url=' + encodeURIComponent(absolute);
-          }
-        } catch(e) {}
-        return url;
-      }
+      // Override window.top to trick frame-busting checks
+      try {
+        if (window.self !== window.top) {
+          Object.defineProperty(window, 'top', { get: function() { return window.self; } });
+          Object.defineProperty(window, 'parent', { get: function() { return window.self; } });
+          Object.defineProperty(window, 'frameElement', { get: function() { return null; } });
+        }
+      } catch(e) {}
+
+      // Block common frame-busting patterns
+      var origSetTimeout = window.setTimeout;
+      window.setTimeout = function(fn, delay) {
+        var fnStr = typeof fn === 'string' ? fn : (fn && fn.toString ? fn.toString() : '');
+        if (fnStr.indexOf('top.location') !== -1 || fnStr.indexOf('parent.location') !== -1) {
+          return; // Block frame-busting timers
+        }
+        return origSetTimeout.apply(this, arguments);
+      };
+
+      // Intercept window.open to route through proxy
+      var origOpen = window.open;
+      window.open = function(url) {
+        if (url && url.startsWith('http')) {
+          window.location.href = '/api/proxy?url=' + encodeURIComponent(url);
+        }
+        return null;
+      };
 
       // Intercept link clicks
       document.addEventListener('click', function(e) {
         var link = e.target.closest('a');
-        if (link && link.href) {
+        if (link) {
           var href = link.getAttribute('href');
-          if (href && !href.startsWith('#') && !href.startsWith('javascript:')) {
+          if (href && !href.startsWith('#') && !href.startsWith('javascript:') && !href.startsWith('data:')) {
             e.preventDefault();
-            var absolute = new URL(href, document.baseURI).href;
-            if (absolute.startsWith('http')) {
-              window.location.href = '/api/proxy?url=' + encodeURIComponent(absolute);
-            }
+            e.stopPropagation();
+            try {
+              var absolute = new URL(href, document.baseURI).href;
+              if (absolute.startsWith('http')) {
+                window.location.href = '/api/proxy?url=' + encodeURIComponent(absolute);
+              }
+            } catch(err) {}
           }
         }
       }, true);
@@ -218,32 +243,41 @@ app.get('/api/proxy', async (req, res) => {
         var form = e.target;
         if (form.action) {
           e.preventDefault();
-          var action = new URL(form.action, document.baseURI).href;
-          var params = new URLSearchParams(new FormData(form));
-          var url = action + '?' + params.toString();
-          window.location.href = '/api/proxy?url=' + encodeURIComponent(url);
+          try {
+            var action = new URL(form.action, document.baseURI).href;
+            var fd = new FormData(form);
+            var params = new URLSearchParams(fd);
+            var url = action + (action.includes('?') ? '&' : '?') + params.toString();
+            window.location.href = '/api/proxy?url=' + encodeURIComponent(url);
+          } catch(err) {}
         }
       }, true);
 
-      // Notify parent frame of URL changes
+      // Notify parent frame of navigation
       try {
-        window.parent.postMessage({ type: 'proxy-navigate', url: '${targetUrl}' }, '*');
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: 'proxy-navigate', url: '${targetUrl.replace(/'/g, "\\'")}' }, '*');
+        }
       } catch(e) {}
     })();
     </script>`;
 
+    // Inject at the very top (before <html> even) so it runs first
     if (html.includes('<head>')) {
-      html = html.replace('<head>', `<head>${baseTag}${interceptScript}`);
+      html = html.replace('<head>', `<head>${baseTag}${sandboxScript}`);
     } else if (html.includes('<HEAD>')) {
-      html = html.replace('<HEAD>', `<HEAD>${baseTag}${interceptScript}`);
+      html = html.replace('<HEAD>', `<HEAD>${baseTag}${sandboxScript}`);
+    } else if (html.includes('<html>') || html.includes('<HTML>')) {
+      html = html.replace(/<html[^>]*>/i, `$&<head>${baseTag}${sandboxScript}</head>`);
     } else {
-      html = baseTag + interceptScript + html;
+      html = `<head>${baseTag}${sandboxScript}</head>` + html;
     }
 
-    // Set headers to allow iframe embedding
+    // ── STEP 3: Set permissive response headers ──
     res.set('Content-Type', 'text/html; charset=utf-8');
+    res.set('Content-Security-Policy', "frame-ancestors *; default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;");
+    res.set('Access-Control-Allow-Origin', '*');
     res.removeHeader('X-Frame-Options');
-    res.removeHeader('Content-Security-Policy');
     res.send(html);
   } catch (err) {
     console.error('Proxy error:', err.message);
