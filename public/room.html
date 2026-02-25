@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>SyncWatch — Room</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -25,106 +25,106 @@
     </div>
   </header>
 
-  <!-- ─── Main Layout ───────────────────────────────────────── -->
+  <!-- ─── Main Layout (2-panel: content + chat) ─────────────── -->
   <div class="layout">
 
-    <!-- ─── Left Panel: Search ──────────────────────────────── -->
-    <aside class="panel panel-left">
-      <div class="panel-tabs">
-        <button class="panel-tab active" data-tab="yt-search">🎬 YouTube</button>
-        <button class="panel-tab" data-tab="web-search">🌐 Web</button>
-        <button class="panel-tab" data-tab="browse">🔗 Browse</button>
+    <!-- ─── Main Content Panel ──────────────────────────────── -->
+    <main class="panel panel-main">
+      <!-- Main Tabs -->
+      <div class="main-tabs">
+        <button class="main-tab active" data-view="youtube">🎬 YouTube</button>
+        <button class="main-tab" data-view="search">🔍 Search</button>
+        <button class="main-tab" data-view="browse">🌐 Browse</button>
       </div>
 
-      <!-- YouTube Search -->
-      <div class="tab-content active" id="tab-yt-search">
-        <div class="search-box">
-          <input type="text" id="yt-search-input" placeholder="Search YouTube..." autocomplete="off">
-          <button id="btn-yt-search" class="btn-search">
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="7.5" cy="7.5" r="5.5" stroke="currentColor" stroke-width="2"/><path d="M12 12l4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-          </button>
+      <!-- ── YouTube View ──────────────────────────────────── -->
+      <div class="main-view active" id="view-youtube">
+        <div class="yt-layout">
+          <div class="yt-player-area">
+            <div class="player-container">
+              <div class="player-placeholder" id="player-placeholder">
+                <div class="placeholder-content">
+                  <svg width="56" height="56" viewBox="0 0 64 64" fill="none">
+                    <circle cx="32" cy="32" r="30" stroke="currentColor" stroke-width="2" opacity="0.3"/>
+                    <polygon points="26,20 46,32 26,44" fill="currentColor" opacity="0.3"/>
+                  </svg>
+                  <p>Search a video to start watching together</p>
+                </div>
+              </div>
+              <div id="yt-player"></div>
+            </div>
+            <div class="now-playing" id="now-playing" style="display:none">
+              <span class="now-playing-label">▶ Now Playing:</span>
+              <span class="now-playing-title" id="now-playing-title"></span>
+            </div>
+          </div>
+          <div class="yt-sidebar">
+            <div class="search-box">
+              <input type="text" id="yt-search-input" placeholder="Search YouTube..." autocomplete="off">
+              <button id="btn-yt-search" class="btn-search">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="7.5" cy="7.5" r="5.5" stroke="currentColor" stroke-width="2"/><path d="M12 12l4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+            <div class="search-info" id="yt-search-info"></div>
+            <div class="search-results" id="yt-results"></div>
+          </div>
         </div>
-        <div class="search-info" id="yt-search-info"></div>
-        <div class="search-results" id="yt-results"></div>
       </div>
 
-      <!-- Web Search -->
-      <div class="tab-content" id="tab-web-search">
-        <div class="search-box">
-          <input type="text" id="web-search-input" placeholder="Search the web..." autocomplete="off">
-          <button id="btn-web-search" class="btn-search">
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="7.5" cy="7.5" r="5.5" stroke="currentColor" stroke-width="2"/><path d="M12 12l4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-          </button>
+      <!-- ── Search View ───────────────────────────────────── -->
+      <div class="main-view" id="view-search">
+        <div class="search-layout">
+          <div class="search-header">
+            <div class="search-box">
+              <input type="text" id="web-search-input" placeholder="Search the web..." autocomplete="off">
+              <button id="btn-web-search" class="btn-search">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="7.5" cy="7.5" r="5.5" stroke="currentColor" stroke-width="2"/><path d="M12 12l4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+            <div class="search-info" id="web-search-info"></div>
+          </div>
+          <div class="search-results-area">
+            <div class="search-results-list" id="web-results"></div>
+            <div class="search-preview">
+              <div class="preview-placeholder" id="search-preview-placeholder">
+                <div class="placeholder-content">
+                  <svg width="56" height="56" viewBox="0 0 64 64" fill="none">
+                    <circle cx="32" cy="32" r="30" stroke="currentColor" stroke-width="2" opacity="0.3"/>
+                    <path d="M32 2a30 30 0 0 0 0 60M32 2a30 30 0 0 1 0 60M2 32h60M6 16h52M6 48h52" stroke="currentColor" stroke-width="2" opacity="0.3"/>
+                  </svg>
+                  <p>Click a result to preview it here</p>
+                </div>
+              </div>
+              <iframe id="search-preview-frame" class="preview-frame" title="Preview"></iframe>
+            </div>
+          </div>
         </div>
-        <div class="search-info" id="web-search-info"></div>
-        <div class="search-results" id="web-results"></div>
       </div>
 
-      <!-- Browse URL -->
-      <div class="tab-content" id="tab-browse">
-        <div class="search-box">
+      <!-- ── Browse View ───────────────────────────────────── -->
+      <div class="main-view" id="view-browse">
+        <div class="browse-bar">
+          <button class="browse-nav-btn" id="btn-browse-back" title="Back">←</button>
           <input type="text" id="browse-url-input" placeholder="Enter URL (https://...)" autocomplete="off">
           <button id="btn-browse" class="btn-search">Go</button>
         </div>
-        <div class="search-info" id="browse-info"></div>
-        <div class="browse-history" id="browse-history"></div>
-      </div>
-    </aside>
-
-    <!-- ─── Center Panel: Player + Browser ──────────────────── -->
-    <section class="panel panel-center">
-      <div class="center-tabs">
-        <button class="center-tab active" data-center="youtube">🎬 YouTube</button>
-        <button class="center-tab" data-center="browser">🌐 Browser</button>
-        <div class="center-tab-url" id="center-url-bar" style="display:none">
-          <input type="text" id="center-url-input" placeholder="Enter URL..." autocomplete="off">
-          <button id="btn-center-go" class="btn-search-sm">Go</button>
-        </div>
-      </div>
-
-      <!-- YouTube View -->
-      <div class="center-view active" id="center-youtube">
-        <div class="player-container">
-          <div class="player-placeholder" id="player-placeholder">
-            <div class="placeholder-content">
-              <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
-                <circle cx="32" cy="32" r="30" stroke="currentColor" stroke-width="2" opacity="0.3"/>
-                <polygon points="26,20 46,32 26,44" fill="currentColor" opacity="0.3"/>
-              </svg>
-              <p>Search a video on the left panel to start watching together</p>
-            </div>
-          </div>
-          <div id="yt-player"></div>
-        </div>
-        <div class="now-playing" id="now-playing" style="display:none">
-          <span class="now-playing-label">▶ Now Playing:</span>
-          <span class="now-playing-title" id="now-playing-title"></span>
-        </div>
-      </div>
-
-      <!-- Browser View -->
-      <div class="center-view" id="center-browser">
-        <div class="browser-container">
+        <div class="browse-container">
           <div class="browser-placeholder" id="browser-placeholder">
             <div class="placeholder-content">
-              <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+              <svg width="56" height="56" viewBox="0 0 64 64" fill="none">
                 <circle cx="32" cy="32" r="30" stroke="currentColor" stroke-width="2" opacity="0.3"/>
                 <path d="M32 2a30 30 0 0 0 0 60M32 2a30 30 0 0 1 0 60M2 32h60M6 16h52M6 48h52" stroke="currentColor" stroke-width="2" opacity="0.3"/>
               </svg>
-              <p>Search the web or enter a URL to browse together</p>
+              <p>Enter a URL above to browse together</p>
             </div>
           </div>
           <iframe id="browse-frame" class="browse-frame" title="Shared Browser"></iframe>
         </div>
-        <div class="now-browsing" id="now-browsing" style="display:none">
-          <span class="now-browsing-label">🔗 Browsing:</span>
-          <span class="now-browsing-url" id="now-browsing-url"></span>
-        </div>
       </div>
-    </section>
+    </main>
 
-    <!-- ─── Right Panel: Chat & Users ───────────────────────── -->
-    <aside class="panel panel-right">
+    <!-- ─── Chat Sidebar ────────────────────────────────────── -->
+    <aside class="panel panel-chat" id="panel-chat">
       <div class="users-section">
         <h3 class="section-title">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
@@ -147,6 +147,14 @@
       </div>
     </aside>
   </div>
+
+  <!-- ─── Mobile Bottom Nav ──────────────────────────────────── -->
+  <nav class="mobile-nav" id="mobile-nav">
+    <button class="mobile-nav-btn active" data-view="youtube">🎬<span>YouTube</span></button>
+    <button class="mobile-nav-btn" data-view="search">🔍<span>Search</span></button>
+    <button class="mobile-nav-btn" data-view="browse">🌐<span>Browse</span></button>
+    <button class="mobile-nav-btn" data-view="chat" id="btn-toggle-chat">💬<span>Chat</span></button>
+  </nav>
 
   <!-- ─── Toast ─────────────────────────────────────────────── -->
   <div class="toast-container" id="toast-container"></div>

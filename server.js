@@ -180,14 +180,64 @@ app.get('/api/proxy', async (req, res) => {
     const parsedUrl = new URL(targetUrl);
     const baseUrl = `${parsedUrl.protocol}//${parsedUrl.host}`;
 
-    // Inject a <base> tag so all relative URLs resolve correctly
-    const baseTag = `<base href="${baseUrl}/" target="_blank">`;
+    // Inject <base> tag with target="_self" so links stay in iframe
+    const baseTag = `<base href="${baseUrl}/" target="_self">`;
+
+    // Script to intercept all clicks and route them through the proxy
+    const interceptScript = `
+    <script>
+    (function() {
+      function proxyUrl(url) {
+        if (!url || url.startsWith('javascript:') || url.startsWith('#') || url.startsWith('data:')) return url;
+        try {
+          var absolute = new URL(url, document.baseURI).href;
+          if (absolute.startsWith('http')) {
+            return '/api/proxy?url=' + encodeURIComponent(absolute);
+          }
+        } catch(e) {}
+        return url;
+      }
+
+      // Intercept link clicks
+      document.addEventListener('click', function(e) {
+        var link = e.target.closest('a');
+        if (link && link.href) {
+          var href = link.getAttribute('href');
+          if (href && !href.startsWith('#') && !href.startsWith('javascript:')) {
+            e.preventDefault();
+            var absolute = new URL(href, document.baseURI).href;
+            if (absolute.startsWith('http')) {
+              window.location.href = '/api/proxy?url=' + encodeURIComponent(absolute);
+            }
+          }
+        }
+      }, true);
+
+      // Intercept form submissions
+      document.addEventListener('submit', function(e) {
+        var form = e.target;
+        if (form.action) {
+          e.preventDefault();
+          var action = new URL(form.action, document.baseURI).href;
+          var params = new URLSearchParams(new FormData(form));
+          var url = action + '?' + params.toString();
+          window.location.href = '/api/proxy?url=' + encodeURIComponent(url);
+        }
+      }, true);
+
+      // Notify parent frame of URL changes
+      try {
+        window.parent.postMessage({ type: 'proxy-navigate', url: '${targetUrl}' }, '*');
+      } catch(e) {}
+    })();
+    </script>`;
+
     if (html.includes('<head>')) {
-      html = html.replace('<head>', `<head>${baseTag}`);
+      html = html.replace('<head>', `<head>${baseTag}${interceptScript}`);
     } else if (html.includes('<HEAD>')) {
-      html = html.replace('<HEAD>', `<HEAD>${baseTag}`);
+      html = html.replace('<HEAD>', `<HEAD>${baseTag}${interceptScript}`);
     } else {
-      html = baseTag + html;
+      html = baseTag + interceptScript + html;
     }
 
     // Set headers to allow iframe embedding

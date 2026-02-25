@@ -24,8 +24,9 @@ socket.emit('join-room', { roomId: ROOM_ID, nick: NICK });
 // ─── State ──────────────────────────────────────────────────
 let ytPlayer = null;
 let ytReady = false;
-let ignoreStateChange = false; // prevent echo loops
+let ignoreStateChange = false;
 let currentVideoId = null;
+let browseHistory = [];
 
 // ═══════════════════════════════════════════════════════════
 //  TOAST NOTIFICATIONS
@@ -50,75 +51,105 @@ $('#btn-copy-code').addEventListener('click', () => {
 });
 
 // ═══════════════════════════════════════════════════════════
-//  LEFT PANEL TABS
+//  MAIN TABS (unified: YouTube / Search / Browse)
 // ═══════════════════════════════════════════════════════════
-$$('.panel-tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    $$('.panel-tab').forEach(t => t.classList.remove('active'));
-    $$('.tab-content').forEach(c => c.classList.remove('active'));
-    tab.classList.add('active');
-    $(`#tab-${tab.dataset.tab}`).classList.add('active');
-  });
+function switchView(viewName) {
+  // Update desktop tabs
+  $$('.main-tab').forEach(t => t.classList.remove('active'));
+  $$('.main-view').forEach(v => v.classList.remove('active'));
+  const desktopTab = $(`.main-tab[data-view="${viewName}"]`);
+  if (desktopTab) desktopTab.classList.add('active');
+  $(`#view-${viewName}`).classList.add('active');
+
+  // Update mobile nav
+  $$('.mobile-nav-btn').forEach(b => b.classList.remove('active'));
+  const mobileBtn = $(`.mobile-nav-btn[data-view="${viewName}"]`);
+  if (mobileBtn) mobileBtn.classList.add('active');
+
+  // Close chat panel on mobile if switching to content views
+  if (viewName !== 'chat') {
+    const chatPanel = $('#panel-chat');
+    if (chatPanel) chatPanel.classList.remove('open');
+  }
+}
+
+// Desktop tabs
+$$('.main-tab').forEach(tab => {
+  tab.addEventListener('click', () => switchView(tab.dataset.view));
 });
 
-// ═══════════════════════════════════════════════════════════
-//  CENTER PANEL TABS (YouTube / Browser)
-// ═══════════════════════════════════════════════════════════
-$$('.center-tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    $$('.center-tab').forEach(t => t.classList.remove('active'));
-    $$('.center-view').forEach(v => v.classList.remove('active'));
-    tab.classList.add('active');
-    $(`#center-${tab.dataset.center}`).classList.add('active');
-    // Show/hide URL bar
-    const urlBar = $('#center-url-bar');
-    if (tab.dataset.center === 'browser') {
-      urlBar.style.display = 'flex';
+// Mobile bottom nav
+$$('.mobile-nav-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.dataset.view === 'chat') {
+      // Toggle chat panel
+      const chatPanel = $('#panel-chat');
+      chatPanel.classList.toggle('open');
+      btn.classList.toggle('active');
+      // Clear chat badge
+      const badge = btn.querySelector('.chat-badge');
+      if (badge) badge.style.display = 'none';
     } else {
-      urlBar.style.display = 'none';
+      switchView(btn.dataset.view);
     }
   });
 });
 
-// Center panel URL bar
-$('#btn-center-go').addEventListener('click', () => {
-  const url = $('#center-url-input').value.trim();
-  if (url) loadInBrowser(url);
+// ═══════════════════════════════════════════════════════════
+//  BROWSE FUNCTIONALITY
+// ═══════════════════════════════════════════════════════════
+$('#btn-browse').addEventListener('click', doBrowse);
+$('#browse-url-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') doBrowse();
 });
-$('#center-url-input').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    const url = $('#center-url-input').value.trim();
-    if (url) loadInBrowser(url);
+
+// Back button
+$('#btn-browse-back').addEventListener('click', () => {
+  if (browseHistory.length > 1) {
+    browseHistory.pop(); // Remove current
+    const prevUrl = browseHistory[browseHistory.length - 1];
+    loadInBrowser(prevUrl, false); // Don't add to history
   }
 });
 
-function switchToCenterTab(tabName) {
-  $$('.center-tab').forEach(t => t.classList.remove('active'));
-  $$('.center-view').forEach(v => v.classList.remove('active'));
-  $(`[data-center="${tabName}"]`).classList.add('active');
-  $(`#center-${tabName}`).classList.add('active');
-  const urlBar = $('#center-url-bar');
-  urlBar.style.display = tabName === 'browser' ? 'flex' : 'none';
+function doBrowse() {
+  let url = $('#browse-url-input').value.trim();
+  if (!url) return;
+  if (!/^https?:\/\//i.test(url)) {
+    url = 'https://' + url;
+    $('#browse-url-input').value = url;
+  }
+  loadInBrowser(url);
+  socket.emit('browse-url', { url });
 }
 
-function loadInBrowser(url) {
-  // Add https:// if missing
+function loadInBrowser(url, addToHistory = true) {
   if (!/^https?:\/\//i.test(url)) {
     url = 'https://' + url;
   }
-  // Switch to browser tab in center panel
-  switchToCenterTab('browser');
+  // Switch to browse view
+  switchView('browse');
   // Load via proxy
   const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
   $('#browse-frame').src = proxyUrl;
   $('#browser-placeholder').style.display = 'none';
-  $('#now-browsing').style.display = 'flex';
-  $('#now-browsing-url').textContent = url;
-  $('#center-url-input').value = url;
-
-  // Add to browse history on left panel
-  addBrowseItem(url, 'You');
+  $('#browse-url-input').value = url;
+  if (addToHistory) {
+    browseHistory.push(url);
+  }
 }
+
+// Listen for proxy navigation messages from iframe
+window.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'proxy-navigate') {
+    const url = e.data.url;
+    $('#browse-url-input').value = url;
+    // Add to history if different from current
+    if (browseHistory.length === 0 || browseHistory[browseHistory.length - 1] !== url) {
+      browseHistory.push(url);
+    }
+  }
+});
 
 // ═══════════════════════════════════════════════════════════
 //  YOUTUBE IFRAME API
@@ -147,11 +178,8 @@ window.onYouTubeIframeAPIReady = function() {
 
 function onPlayerStateChange(event) {
   if (ignoreStateChange) return;
-
   const state = event.data;
   const time = ytPlayer.getCurrentTime();
-
-  // YT.PlayerState: PLAYING=1, PAUSED=2, BUFFERING=3
   if (state === YT.PlayerState.PLAYING) {
     socket.emit('youtube-state', { action: 'play', time });
   } else if (state === YT.PlayerState.PAUSED) {
@@ -162,7 +190,7 @@ function onPlayerStateChange(event) {
 function loadVideo(videoId, title) {
   if (!ytReady) return;
   currentVideoId = videoId;
-
+  switchView('youtube');
   $('#player-placeholder').style.display = 'none';
   $('#now-playing').style.display = 'flex';
   $('#now-playing-title').textContent = title || videoId;
@@ -203,8 +231,6 @@ async function doYTSearch() {
 
     $('#yt-search-info').textContent = `${data.results.length} results for "${query}"`;
     renderYTResults(data.results);
-
-    // Share search results with room
     socket.emit('youtube-search-results', { query, results: data.results });
   } catch (err) {
     $('#yt-search-info').textContent = 'Search failed. Try again.';
@@ -260,8 +286,6 @@ function doWebSearch() {
       }
       $('#web-search-info').textContent = `${data.results.length} results for "${query}"`;
       renderWebResults(data.results);
-
-      // Share with room
       socket.emit('web-search', { query, results: data.results });
     })
     .catch(() => {
@@ -282,54 +306,31 @@ function renderWebResults(results) {
       <div class="web-result-snippet">${escapeHTML(item.snippet)}</div>
     `;
     card.addEventListener('click', () => {
-      // Load in center panel browser via proxy
+      // Highlight selected result
+      $$('.web-result-card').forEach(c => c.classList.remove('active'));
+      card.classList.add('active');
+
+      // Load in preview panel (desktop) or switch to browse (mobile)
+      const isMobile = window.innerWidth <= 768;
+      if (isMobile) {
+        loadInBrowser(item.url);
+        socket.emit('browse-url', { url: item.url });
+      } else {
+        // Load in the inline preview
+        const proxyUrl = `/api/proxy?url=${encodeURIComponent(item.url)}`;
+        $('#search-preview-frame').src = proxyUrl;
+        $('#search-preview-placeholder').style.display = 'none';
+      }
+    });
+
+    // Double-click or long press: open in browse tab
+    card.addEventListener('dblclick', () => {
       loadInBrowser(item.url);
       socket.emit('browse-url', { url: item.url });
     });
+
     container.appendChild(card);
   });
-}
-
-// ═══════════════════════════════════════════════════════════
-//  BROWSE URL
-// ═══════════════════════════════════════════════════════════
-$('#btn-browse').addEventListener('click', doBrowse);
-$('#browse-url-input').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') doBrowse();
-});
-
-function doBrowse() {
-  let url = $('#browse-url-input').value.trim();
-  if (!url) return;
-
-  // Add https:// if missing
-  if (!/^https?:\/\//i.test(url)) {
-    url = 'https://' + url;
-    $('#browse-url-input').value = url;
-  }
-
-  // Open in center panel browser via proxy
-  loadInBrowser(url);
-  $('#browse-info').textContent = `Opened: ${url}`;
-
-  // Share with room
-  socket.emit('browse-url', { url });
-}
-
-function addBrowseItem(url, by) {
-  const container = $('#browse-history');
-  const item = document.createElement('div');
-  item.className = 'browse-item';
-  item.innerHTML = `
-    <span class="browse-item-icon">🔗</span>
-    <span class="browse-item-url">${escapeHTML(url)}</span>
-    <span class="browse-item-by">${escapeHTML(by)}</span>
-  `;
-  item.addEventListener('click', () => {
-    loadInBrowser(url);
-    socket.emit('browse-url', { url });
-  });
-  container.prepend(item);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -344,7 +345,6 @@ function sendChat() {
   const input = $('#chat-input');
   const text = input.value.trim();
   if (!text) return;
-
   socket.emit('chat-message', { text });
   input.value = '';
   input.focus();
@@ -368,6 +368,13 @@ function renderChatMessage(msg) {
 
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
+
+  // Show badge on mobile if chat is closed
+  const chatPanel = $('#panel-chat');
+  if (chatPanel && !chatPanel.classList.contains('open') && window.innerWidth <= 768) {
+    const badge = document.querySelector('#btn-toggle-chat .chat-badge');
+    if (badge) badge.style.display = 'block';
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -376,24 +383,12 @@ function renderChatMessage(msg) {
 
 // ── Room State (on join) ──
 socket.on('room-state', (state) => {
-  // Load current video if one is playing
   if (state.currentVideo) {
     loadVideo(state.currentVideo.videoId, state.currentVideo.title);
   }
-  // Load browse URL
   if (state.browseUrl) {
-    $('#browse-url-input').value = state.browseUrl;
-    addBrowseItem(state.browseUrl, 'earlier');
-    $('#browse-info').textContent = `Last shared: ${state.browseUrl}`;
-    // Load it in the center browser
-    const proxyUrl = `/api/proxy?url=${encodeURIComponent(state.browseUrl)}`;
-    $('#browse-frame').src = proxyUrl;
-    $('#browser-placeholder').style.display = 'none';
-    $('#now-browsing').style.display = 'flex';
-    $('#now-browsing-url').textContent = state.browseUrl;
-    $('#center-url-input').value = state.browseUrl;
+    loadInBrowser(state.browseUrl);
   }
-  // Load chat history
   if (state.chatHistory) {
     state.chatHistory.forEach(msg => renderChatMessage(msg));
   }
@@ -402,7 +397,6 @@ socket.on('room-state', (state) => {
 // ── User List ──
 socket.on('user-list', (users) => {
   $('#user-count').textContent = users.length;
-
   const container = $('#user-list');
   container.innerHTML = '';
   users.forEach(user => {
@@ -424,12 +418,10 @@ socket.on('youtube-play', ({ videoId, title, startedBy }) => {
   showToast(`${startedBy} started playing: ${title}`);
 });
 
-// ── YouTube: State Sync (play/pause/seek) ──
+// ── YouTube: State Sync ──
 socket.on('youtube-state', ({ action, time, from }) => {
   if (!ytReady || !ytPlayer) return;
-
   ignoreStateChange = true;
-
   if (action === 'play') {
     ytPlayer.seekTo(time, true);
     ytPlayer.playVideo();
@@ -437,7 +429,6 @@ socket.on('youtube-state', ({ action, time, from }) => {
     ytPlayer.seekTo(time, true);
     ytPlayer.pauseVideo();
   }
-
   setTimeout(() => { ignoreStateChange = false; }, 1000);
 });
 
@@ -446,13 +437,7 @@ socket.on('youtube-search-results', ({ query, results, searchedBy }) => {
   $('#yt-search-input').value = query;
   $('#yt-search-info').textContent = `${results.length} results for "${query}" (by ${searchedBy})`;
   renderYTResults(results);
-
-  // Switch to YouTube tab
-  $$('.panel-tab').forEach(t => t.classList.remove('active'));
-  $$('.tab-content').forEach(c => c.classList.remove('active'));
-  $('[data-tab="yt-search"]').classList.add('active');
-  $('#tab-yt-search').classList.add('active');
-
+  switchView('youtube');
   showToast(`${searchedBy} searched: "${query}"`);
 });
 
@@ -465,37 +450,13 @@ socket.on('web-search', ({ query, results, searchedBy }) => {
   } else {
     $('#web-search-info').textContent = `"${query}" searched by ${searchedBy}`;
   }
-
-  // Switch to web search tab
-  $$('.panel-tab').forEach(t => t.classList.remove('active'));
-  $$('.tab-content').forEach(c => c.classList.remove('active'));
-  $('[data-tab="web-search"]').classList.add('active');
-  $('#tab-web-search').classList.add('active');
-
+  switchView('search');
   showToast(`${searchedBy} searched the web: "${query}"`);
 });
 
 // ── Browse URL from others ──
 socket.on('browse-url', ({ url, sharedBy }) => {
-  $('#browse-url-input').value = url;
-  addBrowseItem(url, sharedBy);
-  $('#browse-info').textContent = `${sharedBy} shared: ${url}`;
-
-  // Load in center browser via proxy
-  switchToCenterTab('browser');
-  const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
-  $('#browse-frame').src = proxyUrl;
-  $('#browser-placeholder').style.display = 'none';
-  $('#now-browsing').style.display = 'flex';
-  $('#now-browsing-url').textContent = url;
-  $('#center-url-input').value = url;
-
-  // Switch to browse tab in left panel
-  $$('.panel-tab').forEach(t => t.classList.remove('active'));
-  $$('.tab-content').forEach(c => c.classList.remove('active'));
-  $('[data-tab="browse"]').classList.add('active');
-  $('#tab-browse').classList.add('active');
-
+  loadInBrowser(url);
   showToast(`${sharedBy} is browsing: ${url}`);
 });
 
