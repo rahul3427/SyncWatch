@@ -2,13 +2,19 @@
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 
-// ─── URL Params ─────────────────────────────────────────────
-const params = new URLSearchParams(window.location.search);
-const ROOM_ID = params.get('room');
-const NICK = params.get('nick') || 'Anonymous';
+// ─── Extract Room ID from URL path (/room/ROOMID) ──────────
+const pathParts = window.location.pathname.split('/');
+const ROOM_ID = pathParts[pathParts.length - 1] || pathParts[pathParts.length - 2];
 
 if (!ROOM_ID) {
   window.location.href = '/';
+}
+
+// ─── Get Nickname (from localStorage or prompt) ─────────────
+let NICK = localStorage.getItem('syncwatch-nick');
+if (!NICK) {
+  NICK = prompt('Enter your nickname:') || 'Anonymous';
+  localStorage.setItem('syncwatch-nick', NICK);
 }
 
 // ─── Display room code ─────────────────────────────────────
@@ -44,7 +50,8 @@ function showToast(message, duration = 3000) {
 //  COPY ROOM CODE
 // ═══════════════════════════════════════════════════════════
 $('#btn-copy-code').addEventListener('click', () => {
-  navigator.clipboard.writeText(ROOM_ID).then(() => showToast('Room code copied!'));
+  const shareUrl = `${window.location.origin}/room/${ROOM_ID}`;
+  navigator.clipboard.writeText(shareUrl).then(() => showToast('Share link copied! Send it to your friend 🔗'));
 });
 
 // ═══════════════════════════════════════════════════════════
