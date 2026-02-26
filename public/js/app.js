@@ -1,11 +1,12 @@
-// ─── SyncWatch Landing Page Logic ───────────────────────────
+// ─── SyncWatch Landing Page — Password Gate ─────────────────
 const $ = (sel) => document.querySelector(sel);
 
 const nickInput = $('#nickname');
-const roomCodeInput = $('#room-code');
-const btnCreate = $('#btn-create');
-const btnJoin = $('#btn-join');
+const passwordInput = $('#password');
+const btnEnter = $('#btn-enter');
 const errorMsg = $('#error-msg');
+
+const CORRECT_PASSWORD = 'RahulSri123';
 
 function showError(msg) {
   errorMsg.textContent = msg;
@@ -13,74 +14,51 @@ function showError(msg) {
   setTimeout(() => { errorMsg.style.display = 'none'; }, 4000);
 }
 
-function getNick() {
+// ── Enter SyncWatch ──
+btnEnter.addEventListener('click', async () => {
   const nick = nickInput.value.trim();
   if (!nick) {
     showError('Please enter a nickname first!');
     nickInput.focus();
-    return null;
+    return;
   }
-  return nick;
-}
 
-// ── Create Room ──
-btnCreate.addEventListener('click', async () => {
-  const nick = getNick();
-  if (!nick) return;
+  const password = passwordInput.value;
+  if (!password) {
+    showError('Please enter the password!');
+    passwordInput.focus();
+    return;
+  }
 
-  btnCreate.disabled = true;
-  btnCreate.textContent = 'Creating...';
+  if (password !== CORRECT_PASSWORD) {
+    showError('Incorrect password. Please try again.');
+    passwordInput.value = '';
+    passwordInput.focus();
+    return;
+  }
+
+  // Password correct — save nick and auth flag, then create a room
+  localStorage.setItem('syncwatch-nick', nick);
+  sessionStorage.setItem('syncwatch-auth', 'true');
+
+  btnEnter.disabled = true;
+  btnEnter.textContent = 'Entering...';
 
   try {
     const res = await fetch('/api/create-room');
     const data = await res.json();
-    window.location.href = `/room.html?room=${data.roomId}&nick=${encodeURIComponent(nick)}`;
+    window.location.href = `/room/${data.roomId}`;
   } catch (err) {
     showError('Failed to create room. Please try again.');
-    btnCreate.disabled = false;
-    btnCreate.textContent = 'Create Room';
-  }
-});
-
-// ── Join Room ──
-btnJoin.addEventListener('click', async () => {
-  const nick = getNick();
-  if (!nick) return;
-
-  const code = roomCodeInput.value.trim().toUpperCase();
-  if (!code) {
-    showError('Please enter a room code!');
-    roomCodeInput.focus();
-    return;
-  }
-
-  btnJoin.disabled = true;
-  btnJoin.textContent = 'Joining...';
-
-  try {
-    const res = await fetch(`/api/check-room/${code}`);
-    const data = await res.json();
-
-    if (data.exists) {
-      window.location.href = `/room.html?room=${code}&nick=${encodeURIComponent(nick)}`;
-    } else {
-      // Auto-create room with the given code
-      window.location.href = `/room.html?room=${code}&nick=${encodeURIComponent(nick)}`;
-    }
-  } catch (err) {
-    showError('Failed to join room. Please try again.');
-    btnJoin.disabled = false;
-    btnJoin.textContent = 'Join Room';
+    btnEnter.disabled = false;
+    btnEnter.textContent = 'Enter SyncWatch';
   }
 });
 
 // ── Enter Key Support ──
-roomCodeInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') btnJoin.click();
+passwordInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') btnEnter.click();
 });
 nickInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    if (roomCodeInput.value.trim()) btnJoin.click();
-    else roomCodeInput.focus();
-  }
+  if (e.key === 'Enter') passwordInput.focus();
 });

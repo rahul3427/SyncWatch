@@ -9,6 +9,32 @@
   <link rel="stylesheet" href="/css/room.css">
 </head>
 <body>
+  <!-- ─── Password Gate Overlay ──────────────────────────────── -->
+  <div class="password-overlay" id="password-overlay" style="display:none">
+    <div class="password-card">
+      <div class="password-logo">
+        <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+          <circle cx="24" cy="24" r="22" stroke="url(#grad2)" stroke-width="3"/>
+          <polygon points="20,16 34,24 20,32" fill="url(#grad2)"/>
+          <defs>
+            <linearGradient id="grad2" x1="0" y1="0" x2="48" y2="48">
+              <stop offset="0%" stop-color="#a78bfa"/>
+              <stop offset="100%" stop-color="#06b6d4"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <h2>Sync<span>Watch</span></h2>
+        <p>Enter password to join this room</p>
+      </div>
+      <div class="password-fields">
+        <input type="text" id="overlay-nick" placeholder="Your nickname..." maxlength="20" autocomplete="off"/>
+        <input type="password" id="overlay-password" placeholder="Enter password..." autocomplete="off"/>
+        <button id="btn-overlay-enter" class="btn-overlay-enter">Enter Room</button>
+        <div class="overlay-error" id="overlay-error" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- ─── Top Bar ───────────────────────────────────────────── -->
   <header class="topbar">
     <a href="/" class="topbar-logo">Sync<span>Watch</span></a>

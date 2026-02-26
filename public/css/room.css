@@ -1,3 +1,72 @@
+/* ─── Password Overlay ───────────────────────────────────── */
+.password-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(10, 10, 15, 0.97);
+  display: flex; align-items: center; justify-content: center;
+  animation: overlayIn 0.4s ease-out;
+}
+@keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
+
+.password-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px; padding: 36px 32px;
+  width: 100%; max-width: 380px;
+  backdrop-filter: blur(16px);
+  animation: cardIn 0.5s ease-out;
+}
+@keyframes cardIn { from { opacity: 0; transform: translateY(20px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+.password-logo {
+  text-align: center; margin-bottom: 28px;
+}
+.password-logo h2 {
+  font-family: 'Inter', sans-serif; font-size: 1.6rem; font-weight: 800;
+  letter-spacing: -1px; color: #e4e4e7; margin-top: 12px;
+}
+.password-logo h2 span {
+  background: linear-gradient(135deg, #a78bfa, #06b6d4);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.password-logo p {
+  color: #71717a; font-size: 0.85rem; margin-top: 6px;
+}
+
+.password-fields {
+  display: flex; flex-direction: column; gap: 12px;
+}
+.password-fields input {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px; padding: 12px 14px;
+  font-family: 'Inter', sans-serif; font-size: 0.9rem;
+  color: #e4e4e7; outline: none; transition: border-color 0.2s;
+}
+.password-fields input::placeholder { color: #52525b; }
+.password-fields input:focus { border-color: #a78bfa; }
+
+.btn-overlay-enter {
+  background: linear-gradient(135deg, #a78bfa, #06b6d4);
+  border: none; border-radius: 8px; padding: 12px;
+  color: #fff; font-family: 'Inter', sans-serif;
+  font-size: 0.95rem; font-weight: 600;
+  cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;
+  margin-top: 4px;
+}
+.btn-overlay-enter:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(167, 139, 250, 0.3);
+}
+
+.overlay-error {
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-radius: 8px; padding: 10px;
+  color: #f87171; font-size: 0.82rem; text-align: center;
+  animation: msgIn 0.25s ease-out;
+}
+
 /* ─── SyncWatch Room — YouTube + Chat ─────────────────────── */
 :root {
   --bg: #0a0a0f;

@@ -24,17 +24,9 @@ app.use(express.static(path.join(__dirname, "public")));
 // ─── In-memory room store ───────────────────────────────────────────
 const rooms = new Map(); // roomId -> { users: Map<socketId, {nick, id}>, currentVideo: null, searchQuery: '' }
 
-// ─── Root: Auto-create room and redirect ────────────────────────────
+// ─── Root: Serve landing page ────────────────────────────
 app.get("/", (req, res) => {
-  const roomId = uuidv4().slice(0, 8).toUpperCase();
-  rooms.set(roomId, {
-    users: new Map(),
-    currentVideo: null,
-    searchQuery: "",
-    browseUrl: "",
-    chatHistory: [],
-  });
-  res.redirect(`/room/${roomId}`);
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 // ─── Room page: Serve room.html for shareable links ─────────────────

@@ -10,20 +10,79 @@ if (!ROOM_ID) {
   window.location.href = '/';
 }
 
-// ─── Get Nickname (from localStorage or prompt) ─────────────
-let NICK = localStorage.getItem('syncwatch-nick');
-if (!NICK) {
-  NICK = prompt('Enter your nickname:') || 'Anonymous';
-  localStorage.setItem('syncwatch-nick', NICK);
+// ─── Password Gate ──────────────────────────────────────────
+const CORRECT_PASSWORD = 'RahulSri123';
+let NICK = null;
+let socket = null;
+
+function initRoom(nick) {
+  NICK = nick;
+  localStorage.setItem('syncwatch-nick', nick);
+  sessionStorage.setItem('syncwatch-auth', 'true');
+
+  // Hide overlay, show room
+  $('#password-overlay').style.display = 'none';
+
+  // Display room code
+  $('#room-code-display').textContent = ROOM_ID;
+  document.title = `SyncWatch — Room ${ROOM_ID}`;
+
+  // Connect socket
+  socket = io();
+  socket.emit('join-room', { roomId: ROOM_ID, nick: NICK });
+
+  // Initialize all socket event handlers
+  initSocketHandlers();
 }
 
-// ─── Display room code ─────────────────────────────────────
-$('#room-code-display').textContent = ROOM_ID;
-document.title = `SyncWatch — Room ${ROOM_ID}`;
+// Check if already authenticated
+if (sessionStorage.getItem('syncwatch-auth') === 'true') {
+  const savedNick = localStorage.getItem('syncwatch-nick') || 'Anonymous';
+  initRoom(savedNick);
+} else {
+  // Show password overlay
+  $('#password-overlay').style.display = 'flex';
 
-// ─── Socket Connection ─────────────────────────────────────
-const socket = io();
-socket.emit('join-room', { roomId: ROOM_ID, nick: NICK });
+  // Pre-fill saved nickname if any
+  const savedNick = localStorage.getItem('syncwatch-nick');
+  if (savedNick) $('#overlay-nick').value = savedNick;
+
+  $('#btn-overlay-enter').addEventListener('click', () => {
+    const nick = $('#overlay-nick').value.trim();
+    if (!nick) {
+      showOverlayError('Please enter a nickname!');
+      $('#overlay-nick').focus();
+      return;
+    }
+    const pw = $('#overlay-password').value;
+    if (!pw) {
+      showOverlayError('Please enter the password!');
+      $('#overlay-password').focus();
+      return;
+    }
+    if (pw !== CORRECT_PASSWORD) {
+      showOverlayError('Incorrect password. Try again.');
+      $('#overlay-password').value = '';
+      $('#overlay-password').focus();
+      return;
+    }
+    initRoom(nick);
+  });
+
+  $('#overlay-password').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') $('#btn-overlay-enter').click();
+  });
+  $('#overlay-nick').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') $('#overlay-password').focus();
+  });
+}
+
+function showOverlayError(msg) {
+  const el = $('#overlay-error');
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 3000);
+}
 
 // ─── State ──────────────────────────────────────────────────
 let ytPlayer = null;
@@ -276,79 +335,80 @@ function renderChatMessage(msg) {
 }
 
 // ═══════════════════════════════════════════════════════════
-//  SOCKET.IO EVENT HANDLERS
+//  SOCKET.IO EVENT HANDLERS (called after auth)
 // ═══════════════════════════════════════════════════════════
-
-// ── Room State (on join) ──
-socket.on('room-state', (state) => {
-  if (state.currentVideo) {
-    loadVideo(state.currentVideo.videoId, state.currentVideo.title);
-  }
-  if (state.chatHistory) {
-    state.chatHistory.forEach(msg => renderChatMessage(msg));
-  }
-});
-
-// ── User List ──
-socket.on('user-list', (users) => {
-  $('#user-count').textContent = users.length;
-  const container = $('#user-list');
-  container.innerHTML = '';
-  users.forEach(user => {
-    const item = document.createElement('div');
-    item.className = 'user-item';
-    const isYou = user.nick === NICK;
-    item.innerHTML = `
-      <span class="user-dot"></span>
-      <span class="user-nick">${escapeHTML(user.nick)}</span>
-      ${isYou ? '<span class="user-you">(you)</span>' : ''}
-    `;
-    container.appendChild(item);
+function initSocketHandlers() {
+  // ── Room State (on join) ──
+  socket.on('room-state', (state) => {
+    if (state.currentVideo) {
+      loadVideo(state.currentVideo.videoId, state.currentVideo.title);
+    }
+    if (state.chatHistory) {
+      state.chatHistory.forEach(msg => renderChatMessage(msg));
+    }
   });
-});
 
-// ── YouTube: Video Play ──
-socket.on('youtube-play', ({ videoId, title, startedBy }) => {
-  loadVideo(videoId, title);
-  showToast(`${startedBy} started playing: ${title}`);
-});
+  // ── User List ──
+  socket.on('user-list', (users) => {
+    $('#user-count').textContent = users.length;
+    const container = $('#user-list');
+    container.innerHTML = '';
+    users.forEach(user => {
+      const item = document.createElement('div');
+      item.className = 'user-item';
+      const isYou = user.nick === NICK;
+      item.innerHTML = `
+        <span class="user-dot"></span>
+        <span class="user-nick">${escapeHTML(user.nick)}</span>
+        ${isYou ? '<span class="user-you">(you)</span>' : ''}
+      `;
+      container.appendChild(item);
+    });
+  });
 
-// ── YouTube: State Sync ──
-socket.on('youtube-state', ({ action, time, from }) => {
-  if (!ytReady || !ytPlayer) return;
-  ignoreStateChange = true;
-  if (action === 'play') {
-    ytPlayer.seekTo(time, true);
-    ytPlayer.playVideo();
-  } else if (action === 'pause') {
-    ytPlayer.seekTo(time, true);
-    ytPlayer.pauseVideo();
-  }
-  setTimeout(() => { ignoreStateChange = false; }, 1000);
-});
+  // ── YouTube: Video Play ──
+  socket.on('youtube-play', ({ videoId, title, startedBy }) => {
+    loadVideo(videoId, title);
+    showToast(`${startedBy} started playing: ${title}`);
+  });
 
-// ── YouTube: Search Results from others ──
-socket.on('youtube-search-results', ({ query, results, searchedBy }) => {
-  $('#yt-search-input').value = query;
-  $('#yt-search-info').textContent = `${results.length} results for "${query}" (by ${searchedBy})`;
-  renderYTResults(results);
-  showToast(`${searchedBy} searched: "${query}"`);
-});
+  // ── YouTube: State Sync ──
+  socket.on('youtube-state', ({ action, time, from }) => {
+    if (!ytReady || !ytPlayer) return;
+    ignoreStateChange = true;
+    if (action === 'play') {
+      ytPlayer.seekTo(time, true);
+      ytPlayer.playVideo();
+    } else if (action === 'pause') {
+      ytPlayer.seekTo(time, true);
+      ytPlayer.pauseVideo();
+    }
+    setTimeout(() => { ignoreStateChange = false; }, 1000);
+  });
 
-// ── Chat Message ──
-socket.on('chat-message', (msg) => {
-  renderChatMessage(msg);
-});
+  // ── YouTube: Search Results from others ──
+  socket.on('youtube-search-results', ({ query, results, searchedBy }) => {
+    $('#yt-search-input').value = query;
+    $('#yt-search-info').textContent = `${results.length} results for "${query}" (by ${searchedBy})`;
+    renderYTResults(results);
+    showToast(`${searchedBy} searched: "${query}"`);
+  });
 
-// ── Disconnect ──
-socket.on('disconnect', () => {
-  showToast('⚠️ Disconnected from server. Reconnecting...', 5000);
-});
+  // ── Chat Message ──
+  socket.on('chat-message', (msg) => {
+    renderChatMessage(msg);
+  });
 
-socket.on('reconnect', () => {
-  socket.emit('join-room', { roomId: ROOM_ID, nick: NICK });
-  showToast('✅ Reconnected!');
-});
+  // ── Disconnect ──
+  socket.on('disconnect', () => {
+    showToast('⚠️ Disconnected from server. Reconnecting...', 5000);
+  });
+
+  socket.on('reconnect', () => {
+    socket.emit('join-room', { roomId: ROOM_ID, nick: NICK });
+    showToast('✅ Reconnected!');
+  });
+}
 
 // ═══════════════════════════════════════════════════════════
 //  UTILITIES
@@ -358,3 +418,4 @@ function escapeHTML(str) {
   div.textContent = str;
   return div.innerHTML;
 }
+
