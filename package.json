@@ -8,11 +8,12 @@
     "dev": "node server.js"
   },
   "dependencies": {
+    "cheerio": "^1.0.0-rc.12",
     "express": "^4.18.2",
-    "socket.io": "^4.7.4",
-    "uuid": "^9.0.0",
     "node-fetch": "^2.7.0",
-    "cheerio": "^1.0.0-rc.12"
+    "simple-peer": "^9.11.1",
+    "socket.io": "^4.7.4",
+    "uuid": "^9.0.0"
   },
   "engines": {
     "node": ">=16.0.0"

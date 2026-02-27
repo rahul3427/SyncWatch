@@ -33,6 +33,9 @@ function initRoom(nick) {
 
   // Initialize all socket event handlers
   initSocketHandlers();
+
+  // Request Mic Access for Calling
+  initMicrophone();
 }
 
 // Check if already authenticated
@@ -86,6 +89,16 @@ function showOverlayError(msg) {
 
 // ─── State ──────────────────────────────────────────────────
 let ytPlayer = null;
+
+// WebRTC Calling State
+let myStream = null;
+let callingPeer = null;
+let myId = null;
+let receivingCall = false;
+let caller = null;
+let callerSignal = null;
+let callAccepted = false;
+let isMuted = false;
 let ytReady = false;
 let ignoreStateChange = false;
 let currentVideoId = null;
@@ -364,6 +377,7 @@ function initSocketHandlers() {
       `;
       container.appendChild(item);
     });
+    updateCallButtonState(users.length);
   });
 
   // ── YouTube: Video Play ──
@@ -408,6 +422,174 @@ function initSocketHandlers() {
     socket.emit('join-room', { roomId: ROOM_ID, nick: NICK });
     showToast('✅ Reconnected!');
   });
+
+  // ── WebRTC Calling ──
+  socket.on('me', (id) => { myId = id; });
+
+  socket.on('callUser', (data) => {
+    receivingCall = true;
+    caller = data.from;
+    callerSignal = data.signal;
+    updateCallUI();
+    showToast(`Incoming call from ${escapeHTML(data.name)}`);
+  });
+
+  socket.on('callAccepted', (signal) => {
+    callAccepted = true;
+    if (callingPeer) {
+      callingPeer.signal(signal);
+    }
+    updateCallUI();
+  });
+
+  socket.on('callEnded', () => {
+    if (callAccepted || receivingCall) {
+      showToast('Call ended');
+    }
+    endCall(false);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  WEBRTC CALLING LOGIC
+// ═══════════════════════════════════════════════════════════
+
+function updateCallButtonState(userCount) {
+  const btnCall = $('#btn-call-partner');
+  if (userCount > 1 && myStream && !callAccepted && !receivingCall) {
+    btnCall.disabled = false;
+    btnCall.title = 'Call Partner';
+  } else {
+    btnCall.disabled = true;
+    btnCall.title = !myStream ? 'Waiting for mic access' : (callAccepted ? 'In call' : 'Need 2+ users to call');
+  }
+}
+
+function updateCallUI() {
+  const idlePanel = $('#call-idle');
+  const incomingPanel = $('#call-incoming');
+  const activePanel = $('#call-active');
+
+  idlePanel.style.display = (!callAccepted && !receivingCall) ? 'block' : 'none';
+  incomingPanel.style.display = (receivingCall && !callAccepted) ? 'block' : 'none';
+  activePanel.style.display = callAccepted ? 'block' : 'none';
+}
+
+$('#btn-call-partner').addEventListener('click', callPartner);
+$('#btn-answer-call').addEventListener('click', answerCall);
+$('#btn-decline-call').addEventListener('click', declineCall);
+$('#btn-mute-call').addEventListener('click', toggleMute);
+$('#btn-end-call').addEventListener('click', () => endCall(true));
+
+function initMicrophone() {
+  navigator.mediaDevices.getUserMedia({ video: false, audio: true })
+    .then((stream) => {
+      myStream = stream;
+      const userCount = parseInt($('#user-count').textContent) || 0;
+      updateCallButtonState(userCount);
+    })
+    .catch((err) => {
+      console.error("Error accessing mic:", err);
+      showToast("Microphone access denied. You cannot call.");
+    });
+}
+
+function callPartner() {
+  if (!myStream || !myId) return;
+  
+  callingPeer = new SimplePeer({
+    initiator: true,
+    trickle: false,
+    stream: myStream
+  });
+
+  callingPeer.on('signal', (data) => {
+    socket.emit('callUser', { signalData: data, from: myId, name: NICK });
+  });
+
+  callingPeer.on('stream', (remoteStream) => {
+    const remoteAudio = $('#remote-audio');
+    if (remoteAudio) {
+      if ('srcObject' in remoteAudio) {
+        remoteAudio.srcObject = remoteStream;
+      } else {
+        remoteAudio.src = window.URL.createObjectURL(remoteStream);
+      }
+    }
+  });
+
+  showToast("Calling partner...");
+  $('#btn-call-partner').disabled = true;
+}
+
+function answerCall() {
+  callAccepted = true;
+  receivingCall = false;
+  updateCallUI();
+
+  callingPeer = new SimplePeer({
+    initiator: false,
+    trickle: false,
+    stream: myStream
+  });
+
+  callingPeer.on('signal', (data) => {
+    socket.emit('answerCall', { signal: data, to: caller });
+  });
+
+  callingPeer.on('stream', (remoteStream) => {
+    const remoteAudio = $('#remote-audio');
+    if (remoteAudio) {
+      if ('srcObject' in remoteAudio) {
+        remoteAudio.srcObject = remoteStream;
+      } else {
+        remoteAudio.src = window.URL.createObjectURL(remoteStream);
+      }
+    }
+  });
+
+  if (callerSignal) {
+    callingPeer.signal(callerSignal);
+  }
+}
+
+function declineCall() {
+  receivingCall = false;
+  updateCallUI();
+  socket.emit('endCall');
+}
+
+function endCall(notifyServer = true) {
+  callAccepted = false;
+  receivingCall = false;
+  caller = null;
+  callerSignal = null;
+  
+  if (callingPeer) {
+    callingPeer.destroy();
+    callingPeer = null;
+  }
+  
+  if (notifyServer) {
+    socket.emit('endCall');
+  }
+  
+  updateCallUI();
+  const userCount = parseInt($('#user-count').textContent) || 0;
+  updateCallButtonState(userCount);
+}
+
+function toggleMute() {
+  if (myStream) {
+    const audioTrack = myStream.getAudioTracks()[0];
+    if (audioTrack) {
+      audioTrack.enabled = !audioTrack.enabled;
+      isMuted = !audioTrack.enabled;
+      const btn = $('#btn-mute-call');
+      btn.textContent = isMuted ? 'Unmute' : 'Mute';
+      btn.className = isMuted ? 'btn-call btn-danger' : 'btn-call btn-ghost';
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════

@@ -310,6 +310,9 @@ app.get('/api/proxy', async (req, res) => {
 io.on("connection", (socket) => {
   console.log(`⚡ User connected: ${socket.id}`);
 
+  // Emit "me" ID for WebRTC calling
+  socket.emit("me", socket.id);
+
   let currentRoom = null;
   let currentNick = null;
 
@@ -427,8 +430,44 @@ io.on("connection", (socket) => {
     }
   });
 
+  // ── WebRTC Calling ──
+  socket.on("callUser", (data) => {
+    if (!currentRoom) return;
+    const room = rooms.get(currentRoom);
+    if (!room) return;
+
+    let partnerId = null;
+    for (const id of room.users.keys()) {
+      if (id !== socket.id) {
+        partnerId = id;
+        break;
+      }
+    }
+
+    if (partnerId) {
+      console.log(`Routing call from ${socket.id} to ${partnerId} in room ${currentRoom}`);
+      io.to(partnerId).emit("callUser", { 
+        signal: data.signalData || data.signal, 
+        from: socket.id, 
+        name: currentNick
+      });
+    }
+  });
+
+  socket.on("answerCall", (data) => {
+    io.to(data.to).emit("callAccepted", data.signal);
+  });
+
+  socket.on("endCall", () => {
+    if (!currentRoom) return;
+    socket.to(currentRoom).emit("callEnded");
+  });
+
   // ── Disconnect ──
   socket.on("disconnect", () => {
+    // Also notify if they were in a call
+    if (currentRoom) socket.to(currentRoom).emit("callEnded");
+
     if (currentRoom && rooms.has(currentRoom)) {
       const room = rooms.get(currentRoom);
       room.users.delete(socket.id);
