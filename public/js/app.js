@@ -45,13 +45,13 @@ btnEnter.addEventListener('click', async () => {
   btnEnter.textContent = 'Entering...';
 
   // Redirect to the fixed GLOBAL room
-  window.location.href = `/room/GLOBAL`;
+  window.location.href = `/room/PRIVATE`;
 });
 
 // Check if already authenticated on landing page
 window.addEventListener('load', () => {
   if (localStorage.getItem('syncwatch-auth') === 'true') {
-    window.location.href = `/room/GLOBAL`;
+    window.location.href = `/room/PRIVATE`;
   }
 });
 

@@ -23,29 +23,27 @@ const CHAT_HISTORY_FILE = path.join(__dirname, "chat_history.json");
 // ─── In-memory room store ───────────────────────────────────────────
 const rooms = new Map(); // roomId -> { users: Map<socketId, {nick, id}>, currentVideo: null, searchQuery: '' }
 
-// Initialize Global Room
-function initGlobalRoom() {
-  let chatHistory = [];
-  try {
-    if (fs.existsSync(CHAT_HISTORY_FILE)) {
-      chatHistory = JSON.parse(fs.readFileSync(CHAT_HISTORY_FILE, "utf-8"));
-    }
-  } catch (err) {
-    console.error("Error loading chat history:", err);
+// Initialize Private Room
+let initialChatHistory = [];
+try {
+  if (fs.existsSync(CHAT_HISTORY_FILE)) {
+    initialChatHistory = JSON.parse(fs.readFileSync(CHAT_HISTORY_FILE, "utf-8"));
   }
-
-  rooms.set("GLOBAL", {
-    users: new Map(),
-    currentVideo: null,
-    searchQuery: "",
-    browseUrl: "",
-    chatHistory: chatHistory,
-  });
+} catch (err) {
+  console.error("Error loading chat history:", err);
 }
-initGlobalRoom();
+
+rooms.set("PRIVATE", {
+  users: new Map(),
+  currentVideo: null,
+  searchQuery: "",
+  browseUrl: "",
+  chatHistory: initialChatHistory,
+  lastYtState: { videoId: null, time: 0, playing: false }
+});
 
 function saveChatHistory() {
-  const room = rooms.get("GLOBAL");
+  const room = rooms.get("PRIVATE");
   if (room) {
     try {
       fs.writeFileSync(CHAT_HISTORY_FILE, JSON.stringify(room.chatHistory, null, 2));
