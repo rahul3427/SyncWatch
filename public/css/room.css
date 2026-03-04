@@ -141,6 +141,7 @@ body {
   justify-content: center;
   transition: all 0.2s;
   cursor: pointer;
+  flex-shrink: 0;
 }
 .btn-heart:hover {
   transform: scale(1.1);
@@ -282,7 +283,7 @@ body {
 
 .chat-input-row { display: flex; gap: 6px; flex-shrink: 0; }
 .chat-input-row input {
-  flex: 1; background: var(--surface); border: 1px solid var(--glass-border);
+  flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm); padding: 10px 12px; font-family: var(--font);
   font-size: 0.88rem; color: var(--text); outline: none; transition: border-color 0.2s;
   /* Prevent iOS zoom on input focus */
@@ -293,6 +294,7 @@ body {
 .btn-send {
   background: var(--accent-gradient); border: none; border-radius: var(--radius-sm);
   padding: 10px 12px; color: #fff; cursor: pointer; display: flex; align-items: center; transition: transform 0.15s;
+  flex-shrink: 0;
 }
 .btn-send:hover { transform: scale(1.1); }
 
