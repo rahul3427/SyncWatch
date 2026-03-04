@@ -18,14 +18,14 @@ let socket = null;
 function initRoom(nick) {
   NICK = nick;
   localStorage.setItem('syncwatch-nick', nick);
-  sessionStorage.setItem('syncwatch-auth', 'true');
+  localStorage.setItem('syncwatch-auth', 'true');
 
   // Hide overlay, show room
   $('#password-overlay').style.display = 'none';
 
   // Display room code
   $('#room-code-display').textContent = ROOM_ID;
-  document.title = `SyncWatch — Room ${ROOM_ID}`;
+  document.title = `Rahul's Cinema — Room ${ROOM_ID}`;
 
   // Connect socket
   socket = io();
@@ -39,7 +39,7 @@ function initRoom(nick) {
 }
 
 // Check if already authenticated
-if (sessionStorage.getItem('syncwatch-auth') === 'true') {
+if (localStorage.getItem('syncwatch-auth') === 'true') {
   const savedNick = localStorage.getItem('syncwatch-nick') || 'Anonymous';
   initRoom(savedNick);
 } else {
@@ -124,6 +124,11 @@ function showToast(message, duration = 3000) {
 $('#btn-copy-code').addEventListener('click', () => {
   const shareUrl = `${window.location.origin}/room/${ROOM_ID}`;
   navigator.clipboard.writeText(shareUrl).then(() => showToast('Share link copied! Send it to your friend 🔗'));
+});
+
+$('#btn-heart-share').addEventListener('click', () => {
+  showHeartAnimation();
+  if (socket) socket.emit('send-heart');
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -321,6 +326,12 @@ function sendChat() {
   input.focus();
 }
 
+$('#btn-delete-chat').addEventListener('click', () => {
+  if (confirm('Are you sure you want to delete all chat history?')) {
+    socket.emit('delete-chat');
+  }
+});
+
 function renderChatMessage(msg) {
   const container = $('#chat-messages');
   const div = document.createElement('div');
@@ -413,6 +424,11 @@ function initSocketHandlers() {
     renderChatMessage(msg);
   });
 
+  socket.on('chat-history-cleared', () => {
+    $('#chat-messages').innerHTML = '';
+    showToast('🧹 Chat history cleared');
+  });
+
   // ── Disconnect ──
   socket.on('disconnect', () => {
     showToast('⚠️ Disconnected from server. Reconnecting...', 5000);
@@ -431,6 +447,7 @@ function initSocketHandlers() {
     caller = data.from;
     callerSignal = data.signal;
     updateCallUI();
+    startRinging();
     showToast(`Incoming call from ${escapeHTML(data.name)}`);
   });
 
@@ -446,7 +463,12 @@ function initSocketHandlers() {
     if (callAccepted || receivingCall) {
       showToast('Call ended');
     }
+    stopRinging();
     endCall(false);
+  });
+
+  socket.on('receive-heart', () => {
+    showHeartAnimation();
   });
 }
 
@@ -479,7 +501,10 @@ $('#btn-call-partner').addEventListener('click', callPartner);
 $('#btn-answer-call').addEventListener('click', answerCall);
 $('#btn-decline-call').addEventListener('click', declineCall);
 $('#btn-mute-call').addEventListener('click', toggleMute);
-$('#btn-end-call').addEventListener('click', () => endCall(true));
+$('#btn-end-call').addEventListener('click', () => {
+  stopRinging();
+  endCall(true);
+});
 
 function initMicrophone() {
   navigator.mediaDevices.getUserMedia({ video: false, audio: true })
@@ -525,6 +550,7 @@ function callPartner() {
 function answerCall() {
   callAccepted = true;
   receivingCall = false;
+  stopRinging();
   updateCallUI();
 
   callingPeer = new SimplePeer({
@@ -555,6 +581,7 @@ function answerCall() {
 
 function declineCall() {
   receivingCall = false;
+  stopRinging();
   updateCallUI();
   socket.emit('endCall');
 }
@@ -599,5 +626,63 @@ function escapeHTML(str) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+// ─── Ringing and Vibration ───
+let vibrationInterval = null;
+
+function startRinging() {
+  const ringingAudio = $('#ringing-audio');
+  if (ringingAudio) {
+    ringingAudio.currentTime = 0;
+    ringingAudio.play().catch(err => console.log("Audio play blocked:", err));
+  }
+
+  if ("vibrate" in navigator) {
+    // Vibration pattern: 500ms vibrate, 500ms pause
+    navigator.vibrate([500, 500]);
+    vibrationInterval = setInterval(() => {
+      navigator.vibrate([500, 500]);
+    }, 1000);
+  }
+}
+
+function stopRinging() {
+  const ringingAudio = $('#ringing-audio');
+  if (ringingAudio) {
+    ringingAudio.pause();
+    ringingAudio.currentTime = 0;
+  }
+
+  if (vibrationInterval) {
+    clearInterval(vibrationInterval);
+    vibrationInterval = null;
+    navigator.vibrate(0);
+  }
+}
+
+function showHeartAnimation() {
+  const count = 15;
+  for (let i = 0; i < count; i++) {
+    setTimeout(() => {
+      const heart = document.createElement('div');
+      heart.className = 'floating-heart';
+      heart.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>`;
+      
+      const startX = Math.random() * 100;
+      const size = 15 + Math.random() * 20;
+      const duration = 2 + Math.random() * 2;
+      
+      heart.style.left = `${startX}vw`;
+      heart.style.width = `${size}px`;
+      heart.style.height = `${size}px`;
+      heart.style.animationDuration = `${duration}s`;
+      heart.style.opacity = 0.6 + Math.random() * 0.4;
+      
+      document.body.appendChild(heart);
+      
+      setTimeout(() => heart.remove(), duration * 1000);
+    }, i * 100);
+  }
 }
 

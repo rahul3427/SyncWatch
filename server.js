@@ -6,6 +6,7 @@ const { v4: uuidv4 } = require("uuid");
 const fetch = require("node-fetch");
 const cheerio = require("cheerio");
 const path = require("path");
+const fs = require("fs");
 
 // HTTPS agent that bypasses SSL certificate issues (for proxy)
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
@@ -17,12 +18,52 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 3000;
-
-// Serve static files
-app.use(express.static(path.join(__dirname, "public")));
+const CHAT_HISTORY_FILE = path.join(__dirname, "chat_history.json");
 
 // ─── In-memory room store ───────────────────────────────────────────
 const rooms = new Map(); // roomId -> { users: Map<socketId, {nick, id}>, currentVideo: null, searchQuery: '' }
+
+// Initialize Global Room
+function initGlobalRoom() {
+  let chatHistory = [];
+  try {
+    if (fs.existsSync(CHAT_HISTORY_FILE)) {
+      chatHistory = JSON.parse(fs.readFileSync(CHAT_HISTORY_FILE, "utf-8"));
+    }
+  } catch (err) {
+    console.error("Error loading chat history:", err);
+  }
+
+  rooms.set("GLOBAL", {
+    users: new Map(),
+    currentVideo: null,
+    searchQuery: "",
+    browseUrl: "",
+    chatHistory: chatHistory,
+  });
+}
+initGlobalRoom();
+
+function saveChatHistory() {
+  const room = rooms.get("GLOBAL");
+  if (room) {
+    try {
+      fs.writeFileSync(CHAT_HISTORY_FILE, JSON.stringify(room.chatHistory, null, 2));
+    } catch (err) {
+      console.error("Error saving chat history:", err);
+    }
+  }
+}
+
+
+// ─── REST: Check Room Exists ────────────────────────────────────────
+app.get("/api/check-room/:roomId", (req, res) => {
+  const roomId = req.params.roomId.toUpperCase();
+  res.json({ exists: rooms.has(roomId) });
+});
+
+// Serve static files
+app.use(express.static(path.join(__dirname, "public")));
 
 // ─── Root: Serve landing page ────────────────────────────
 app.get("/", (req, res) => {
@@ -32,26 +73,6 @@ app.get("/", (req, res) => {
 // ─── Room page: Serve room.html for shareable links ─────────────────
 app.get("/room/:roomId", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "room.html"));
-});
-
-
-// ─── REST: Create Room ──────────────────────────────────────────────
-app.get("/api/create-room", (req, res) => {
-  const roomId = uuidv4().slice(0, 8).toUpperCase();
-  rooms.set(roomId, {
-    users: new Map(),
-    currentVideo: null,
-    searchQuery: "",
-    browseUrl: "",
-    chatHistory: [],
-  });
-  res.json({ roomId });
-});
-
-// ─── REST: Check Room Exists ────────────────────────────────────────
-app.get("/api/check-room/:roomId", (req, res) => {
-  const roomId = req.params.roomId.toUpperCase();
-  res.json({ exists: rooms.has(roomId) });
 });
 
 // ─── REST: YouTube Search Proxy ─────────────────────────────────────
@@ -426,8 +447,34 @@ io.on("connection", (socket) => {
       room.chatHistory.push(msg);
       // Keep only last 100 messages
       if (room.chatHistory.length > 100) room.chatHistory.shift();
+      saveChatHistory();
       io.to(currentRoom).emit("chat-message", msg);
     }
+  });
+
+  // ── Delete Chat ──
+  socket.on("delete-chat", () => {
+    if (!currentRoom) return;
+    const room = rooms.get(currentRoom);
+    if (room) {
+      room.chatHistory = [];
+      saveChatHistory();
+      io.to(currentRoom).emit("chat-history-cleared");
+      
+      const clearMsg = {
+        nick: "🤖 System",
+        text: `Chat history was cleared by ${currentNick}`,
+        time: new Date().toLocaleTimeString(),
+      };
+      room.chatHistory.push(clearMsg);
+      io.to(currentRoom).emit("chat-message", clearMsg);
+    }
+  });
+
+  // ── Heart Share ──
+  socket.on("send-heart", () => {
+    if (!currentRoom) return;
+    socket.to(currentRoom).emit("receive-heart");
   });
 
   // ── WebRTC Calling ──

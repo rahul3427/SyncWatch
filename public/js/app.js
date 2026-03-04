@@ -37,21 +37,21 @@ btnEnter.addEventListener('click', async () => {
     return;
   }
 
-  // Password correct — save nick and auth flag, then create a room
+  // Password correct — save nick and auth flag, then redirect to the global room
   localStorage.setItem('syncwatch-nick', nick);
-  sessionStorage.setItem('syncwatch-auth', 'true');
+  localStorage.setItem('syncwatch-auth', 'true');
 
   btnEnter.disabled = true;
   btnEnter.textContent = 'Entering...';
 
-  try {
-    const res = await fetch('/api/create-room');
-    const data = await res.json();
-    window.location.href = `/room/${data.roomId}`;
-  } catch (err) {
-    showError('Failed to create room. Please try again.');
-    btnEnter.disabled = false;
-    btnEnter.textContent = 'Enter SyncWatch';
+  // Redirect to the fixed GLOBAL room
+  window.location.href = `/room/GLOBAL`;
+});
+
+// Check if already authenticated on landing page
+window.addEventListener('load', () => {
+  if (localStorage.getItem('syncwatch-auth') === 'true') {
+    window.location.href = `/room/GLOBAL`;
   }
 });
 
