@@ -443,8 +443,10 @@ io.on("connection", (socket) => {
         time: new Date().toLocaleTimeString(),
       };
       room.chatHistory.push(msg);
-      // Keep only last 100 messages
-      if (room.chatHistory.length > 100) room.chatHistory.shift();
+      // Prune history: if it crosses 1000, remove the oldest 100
+      if (room.chatHistory.length >= 1000) {
+        room.chatHistory.splice(0, 100);
+      }
       saveChatHistory();
       io.to(currentRoom).emit("chat-message", msg);
     }
