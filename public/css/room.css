@@ -131,12 +131,21 @@ body {
 
 /* Heart Share Button */
 .btn-heart {
-  color: #f472b6 !important;
-  margin-right: 4px;
+  color: #f472b6;
+  background: var(--surface);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  cursor: pointer;
 }
 .btn-heart:hover {
-  transform: scale(1.2);
-  filter: drop-shadow(0 0 8px rgba(244, 114, 182, 0.6));
+  transform: scale(1.1);
+  background: rgba(244, 114, 182, 0.1);
+  border-color: rgba(244, 114, 182, 0.4);
 }
 
 /* Floating Hearts Animation */
